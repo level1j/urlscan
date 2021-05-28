@@ -14,6 +14,7 @@ from copy import deepcopy
 
 REQ_TIMEOUT_SECONDS = 300
 REQ_WAIT_RETRY_SECONDS = 1800
+REQ_RETRY_NUMER = 3
 GET_TOP_UUID = 1
 
 def str2date(s):
@@ -35,40 +36,23 @@ def get_validate_path(url):
     else:
         return url
 
-def urlscan_search_api(hostname):
-    URL = 'https://urlscan.io/api/v1/search/'
-    params = {'q': hostname}
-    while True:
+def requests_get(url, params=None):
+    for i in range(REQ_RETRY_NUMER):
         try:
-            response = requests.get(URL, params=params, timeout=REQ_TIMEOUT_SECONDS)
-            response.encoding = response.apparent_encoding
-            break
-        except:
-            print('Request Timeout for {}'.format(URL))
-            time.sleep(REQ_WAIT_RETRY_SECONDS)
-    response_json = json.loads(response.text)
-    return response_json['results']
-
-def requests_get(url):
-    while True:
-        try:
-            response = requests.get(url, timeout=REQ_TIMEOUT_SECONDS)
-            response.encoding = response.apparent_encoding
+            r = requests.get(url, params=params, timeout=REQ_TIMEOUT_SECONDS)
+            r.encoding = r.apparent_encoding
             break
         except:
             print('Request Timeout for {}'.format(url))
             time.sleep(REQ_WAIT_RETRY_SECONDS)
-    return response.text
+    return r
 
-def urlscan_result_api(uuid):
-    url = 'https://urlscan.io/api/v1/result/' + uuid + '/'
-    response_txt = requests_get(url)
-    response_json = json.loads(response_txt)
-    return response_json
-
-def urlscan_response_req(hash):
-    url = 'https://urlscan.io/responses/' + hash + '/'
-    return requests_get(url)
+def urlscan_search_api(hostname):
+    url = 'https://urlscan.io/api/v1/search/'
+    params = {'q': hostname}
+    response = requests_get(url, params=params)
+    response_json = json.loads(response.text)
+    return response_json['results']
 
 def urlscan_search(hostname):
     urlscan_search_results = urlscan_search_api(hostname)
@@ -77,16 +61,26 @@ def urlscan_search(hostname):
     return urlscan_search_results
 
 def urlscan_result(uuid):
-    urlscan_result_result = urlscan_result_api(uuid)
-    return urlscan_result_result
+    url = 'https://urlscan.io/api/v1/result/' + uuid + '/'
+    response = requests_get(url)
+    response_json = json.loads(response.text)
+    return response_json
 
 def urlscan_dom(url):
-    urlscan_dom_result = requests_get(url)
-    return urlscan_dom_result
+    response = requests_get(url)
+    #Urlscan.io returns 404 status sometimes when we get response and dom. So retry again.
+    if response.status_code == 404:
+        time.sleep(REQ_WAIT_RETRY_SECONDS)
+        response = requests_get(url)
+    return response.text
 
 def urlscan_response(hash):
-    urlscan_response_result = urlscan_response_req(hash)
-    return urlscan_response_result
+    url = 'https://urlscan.io/responses/' + hash + '/'
+    response = requests_get(url)
+    if response.status_code == 404:
+        time.sleep(REQ_WAIT_RETRY_SECONDS)
+        response = requests_get(url)
+    return response.text
 
 def urlscan_screenshot(url):
     while True:
@@ -171,8 +165,6 @@ def main():
     previous_dir, cwd_dir = mkdir_chdir(hostname + '_urlscan_' + get_now_with_sec())
     urlscan_search_results = urlscan_search(hostname)
     urlscan_search_results = sorted(urlscan_search_results, key=lambda x: dateutil.parser.parse(x['task']['time']), reverse=True)
-    if args.minimum_size:
-        urlscan_search_results = list(filter(lambda x: int(x['stats']['dataLength']) >= args.minimum_size, urlscan_search_results))
     if args.url:
         urlscan_search_results_bak = deepcopy(urlscan_search_results)
         #ex: x['task']['url'] = 'https://www.example.com', x['page']['url'] = 'https://www.example.com/'
@@ -183,6 +175,8 @@ def main():
             urlscan_search_results = urlscan_search_results_bak
     if args.strict_hostname:
         urlscan_search_results = list(filter(lambda x: x['page']['domain'] == hostname, urlscan_search_results))
+    if args.minimum_size:
+        urlscan_search_results = list(filter(lambda x: int(x['stats']['dataLength']) >= args.minimum_size, urlscan_search_results))
     make_file_urlscan_search(hostname, urlscan_search_results)
     for uuid in [d['_id'] for d in urlscan_search_results][0:args.top]:
         print('{} for {}'.format(uuid, hostname))
