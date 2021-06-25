@@ -136,8 +136,10 @@ def mkdir_chdir(cwd_dir):
     os.chdir(cwd_dir)
     return os.path.abspath(current_dir), os.path.abspath(cwd_dir)
 
-def get_urlscan_result(uuid, hostname):
+def get_urlscan_result(uuid, hostname=None):
     urlscan_result_result = urlscan_result(uuid)
+    if hostname is None:
+        hostname = get_validate_hostname(urlscan_result_result['task']['url'])
     make_file_urlscan_result(hostname, urlscan_result_result, uuid)
     urlscan_dom_result = urlscan_dom(urlscan_result_result['task']['domURL'])
     make_file_urlscan_dom(hostname, urlscan_dom_result, urlscan_result_result['task']['domURL'])
@@ -153,36 +155,43 @@ def parse_options():
     parser.add_argument('--top', action='store', dest='top', type=int, default=GET_TOP_UUID, help='how many result sorted recently? (default: 1)')
     parser.add_argument('--minimum-size', action='store', dest='minimum_size', type=int, help='filter by minimum bytes in stats.dataLength.')
     parser.add_argument('--strict-hostname', action='store_true', default=False, dest='strict_hostname', help='ex. example.com: doesn\'t match www.example.com when this options is true. (default: false)')
+    parser.add_argument('--uuid', action='store', dest='uuid', help='uuid')
     args = parser.parse_args()
     return args
 
 def main():
     args = parse_options()
-    if args.hostname:
-        hostname = get_validate_hostname(args.hostname)
-    elif args.url:
-        hostname = get_validate_hostname(args.url)
-    previous_dir, cwd_dir = mkdir_chdir(hostname + '_urlscan_' + get_now_with_sec())
-    urlscan_search_results = urlscan_search(hostname)
-    urlscan_search_results = sorted(urlscan_search_results, key=lambda x: dateutil.parser.parse(x['task']['time']), reverse=True)
-    if args.url:
-        urlscan_search_results_bak = deepcopy(urlscan_search_results)
-        #ex: x['task']['url'] = 'https://www.example.com', x['page']['url'] = 'https://www.example.com/'
-        #x['page']['url'] always consits '/' even if x['task']['url'] doesn't consist of '/'.
-        url = get_validate_path(args.url)
-        urlscan_search_results = list(filter(lambda x: x['page']['url'] == url, urlscan_search_results))
-        if len(urlscan_search_results) == 0 and args.hostname:
-            urlscan_search_results = urlscan_search_results_bak
-    if args.strict_hostname:
-        urlscan_search_results = list(filter(lambda x: x['page']['domain'] == hostname, urlscan_search_results))
-    if args.minimum_size:
-        urlscan_search_results = list(filter(lambda x: int(x['stats']['dataLength']) >= args.minimum_size, urlscan_search_results))
-    make_file_urlscan_search(hostname, urlscan_search_results)
-    for uuid in [d['_id'] for d in urlscan_search_results][0:args.top]:
-        print('{} for {}'.format(uuid, hostname))
+    if args.uuid:
+        uuid = args.uuid
+        previous_dir, cwd_dir = mkdir_chdir(uuid + '_urlscan_' + get_now_with_sec())
         previous_dir2, cwd_dir2 = mkdir_chdir(uuid)
-        get_urlscan_result(uuid, hostname)
-        os.chdir(previous_dir2)
+        get_urlscan_result(uuid)
+    else:
+        if args.hostname:
+            hostname = get_validate_hostname(args.hostname)
+        elif args.url:
+            hostname = get_validate_hostname(args.url)
+        previous_dir, cwd_dir = mkdir_chdir(hostname + '_urlscan_' + get_now_with_sec())
+        urlscan_search_results = urlscan_search(hostname)
+        urlscan_search_results = sorted(urlscan_search_results, key=lambda x: dateutil.parser.parse(x['task']['time']), reverse=True)
+        if args.url:
+            urlscan_search_results_bak = deepcopy(urlscan_search_results)
+            #ex: x['task']['url'] = 'https://www.example.com', x['page']['url'] = 'https://www.example.com/'
+            #x['page']['url'] always consits '/' even if x['task']['url'] doesn't consist of '/'.
+            url = get_validate_path(args.url)
+            urlscan_search_results = list(filter(lambda x: x['page']['url'] == url, urlscan_search_results))
+            if len(urlscan_search_results) == 0 and args.hostname:
+                urlscan_search_results = urlscan_search_results_bak
+        if args.strict_hostname:
+            urlscan_search_results = list(filter(lambda x: x['page']['domain'] == hostname, urlscan_search_results))
+        if args.minimum_size:
+            urlscan_search_results = list(filter(lambda x: int(x['stats']['dataLength']) >= args.minimum_size, urlscan_search_results))
+        make_file_urlscan_search(hostname, urlscan_search_results)
+        for uuid in [d['_id'] for d in urlscan_search_results][0:args.top]:
+            print('{} for {}'.format(uuid, hostname))
+            previous_dir2, cwd_dir2 = mkdir_chdir(uuid)
+            get_urlscan_result(uuid, hostname)
+            os.chdir(previous_dir2)
 
 if __name__ == '__main__':
     main()
