@@ -11,10 +11,11 @@ import os, sys
 import re
 import pprint, json
 from copy import deepcopy
+import time
 
 REQ_TIMEOUT_SECONDS = 300
-REQ_WAIT_RETRY_SECONDS = 1800
-REQ_RETRY_NUMER = 3
+REQ_WAIT_RETRY_SECONDS = 10
+REQ_RETRY_NUMER = 1
 GET_TOP_UUID = 1
 
 def str2date(s):
@@ -70,6 +71,7 @@ def urlscan_dom(url):
     response = requests_get(url)
     #Urlscan.io returns 404 status sometimes when we get response and dom. So retry again.
     if response.status_code == 404:
+        print('status_code = 404 for {}'.format(url))
         time.sleep(REQ_WAIT_RETRY_SECONDS)
         response = requests_get(url)
     return response.text
@@ -78,6 +80,7 @@ def urlscan_response(hash):
     url = 'https://urlscan.io/responses/' + hash + '/'
     response = requests_get(url)
     if response.status_code == 404:
+        print('status_code = 404 for {}'.format(url))
         time.sleep(REQ_WAIT_RETRY_SECONDS)
         response = requests_get(url)
     return response.text
