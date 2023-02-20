@@ -57,7 +57,10 @@ def urlscan_search_api(hostname):
 
 def urlscan_search(hostname):
     urlscan_search_results = urlscan_search_api(hostname)
-    urlscan_search_results = sorted(urlscan_search_results, key=lambda x: str2date(x['indexedAt']))
+    #urlscan_search_results = sorted(urlscan_search_results, key=lambda x: str2date(x['indexedAt']))
+    #April 20, 2022 - Search Index Version v1.2
+    #The indexed_at field was removed. Please rely on the task.time field.
+    urlscan_search_results = sorted(urlscan_search_results, key=lambda x: str2date(x['task']['time']))
     urlscan_search_results = sorted(urlscan_search_results, key=lambda x: x['stats']['requests'], reverse=True)
     return urlscan_search_results
 
